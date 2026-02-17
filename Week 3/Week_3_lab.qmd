@@ -1,0 +1,297 @@
+---
+title: "Week 3: Lab"
+subtitle: "Data preprocessing, wrangling, and visualization"
+format: pdf
+editor: visual
+date: now
+---
+
+## Load packages
+
+```{r}
+#| message: false
+#| warning: false
+
+pkgs <- c("tidyverse", "dplyr", "readr", "magrittr", "ggplot2", 
+          "cowplot", "GGally", "knitr", "data.table", 
+          "skimr", "flextable", "Metrics", "ggpubr", "devtools")
+
+for (i in seq_along(pkgs)){
+  pkg <- pkgs[[i]]
+  if(pkg%in%rownames(installed.packages())){
+    cat("Available:", pkg, "\n")
+  }
+  else{
+    cat("Not available:",pkg,">> now installing...", "\n")
+    install.packages(pkg, repos =  "https://cloud.r-project.org")
+    cat("Now available:", pkg, "\n")
+  }
+  
+  library(pkg, character.only = TRUE)
+  cat("Package loaded:", pkg,"\n")
+}
+```
+
+## Load the data
+
+```{r}
+#| message: false
+#| warning: false
+
+liv <- 
+  "https://raw.githubusercontent.com/Bleznolap/GENET_5910_2025/main/Data/ClinicalTraits.csv"
+
+## Load the data
+
+liver_df <- read_csv(liv)
+
+## Check the dimension: how many rows and columns
+
+dim(liver_df)
+```
+
+## 1). Check the data
+
+
+```{r}
+#| message: false
+#| warning: false
+
+## Check the total NAs
+sum(is.na(liver_df))
+
+## Look at the data descriptive statistics
+summary(liver_df)
+
+## Check remove NAs for the entire data
+liver_df_na <- na.omit(liver_df)
+
+## Check remove NAs only in selected columns
+liver_df_new <- drop_na(liver_df, c(weight_g, Trigly, Total_Chol, HDL_Chol, 
+                                    Glucose, Aneurysm))
+```
+
+## 2). Check the data further with skimr
+
+```{r}
+
+## Select column variables: Mice, Mouse_ID, Strain, sex, weight_g, Trigly, 
+## Total_Chol, HDL_Chol, Glucose, Aneurysm
+
+liver_df_new <- liver_df_new |> 
+  select(c(Mice, Mouse_ID, Strain, sex, weight_g, Trigly, Total_Chol, 
+           HDL_Chol, Glucose, Aneurysm)) 
+
+head(liver_df_new)
+
+## Check the data
+## Skimr package with the skim() function provides more descriptive information
+## about the data compared to summary(). You can see number of colums and rows;
+## number of columns that are character and numeric; missing rate per columns; etc
+
+skim(liver_df_new)
+```
+
+\newpage
+
+## 3). Data filtering
+
+```{r}
+
+## See the first few rows of the filtered data for NAs
+liver_df_new
+
+## Filter by sex and create a data frame for each sex
+liver_f <- liver_df_new |> 
+  filter(sex==1) 
+
+liver_m <- liver_df_new |> 
+  filter(sex==2)
+
+## Check the first six rows for each sex
+liver_df_new |> 
+  filter(sex==1) |> 
+  head()
+
+liver_df_new |> 
+  filter(sex==2) |> 
+  head()
+
+
+```
+
+## 4). Arrange the data by a specific column
+
+```{r}
+## Arrange by weight_g in descending order
+## Note you can arrange by more than 1 column by comma separating the columns.
+## E.g arrange(desc(weight_g, Trigly, Total_Chol)). However, the first selected 
+## column takes precedence, then the second, and third.
+
+liver_df_new |> 
+  arrange(desc(weight_g)) |> 
+  head()
+
+```
+
+## 5). Data summarizing
+
+```{r}
+## Summarize weight_g and Glucose level by strain
+
+liver_df_new |> 
+  group_by(Strain) |> 
+  summarise(n=n(),
+            avg_weight=mean(weight_g),
+            avg_gluc=mean(Glucose))
+
+## Summarise the mean of all column variables
+
+liver_df_new |> 
+  group_by(Strain) |> 
+  summarise(across(where(is.numeric),
+                   mean))
+```
+
+## 6). Data pivoting
+
+```{r}
+## Pivoting
+
+## With pivoting, we're transforming by either lengthening the rows (pivot_longer) 
+## and reducing the columns or widening the columns (pivot_wider) and reducing 
+## the rows
+
+liver_lng <- liver_df_new |> 
+  pivot_longer(cols = weight_g:Aneurysm,
+               names_to = "variables",
+               values_to = "value")
+head(liver_lng)
+```
+
+## 7). Data Visualization
+
+```{r}
+
+#######################################
+## Plot with ggplot2 package
+######################################
+
+ggplot(liver_df_new, aes(Strain, weight_g))+
+  geom_boxplot()
+
+ggplot(liver_df_new, aes(weight_g, Glucose, color = Strain))+
+  geom_point(size=2)
+
+ggplot(liver_df_new, aes(weight_g, Glucose, shape = factor(sex)))+
+  geom_point(size=2, aes(color = factor(sex)))
+
+ggplot(liver_lng, aes(variables, value, fill =Strain ))+
+  geom_col(position="dodge")+
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplot(liver_lng, aes(variables, value, fill = factor(sex)))+
+  geom_col(position="dodge")+
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+## 8). Data visualization: Publication-ready
+
+```{r}
+#| fig-width: 8
+#| fig-height: 8
+
+
+#######################################
+## Plot with ggplot2 and cowplot package
+######################################
+
+g1 <- ggplot(liver_df_new, aes(Strain, weight_g))+
+  geom_boxplot()
+
+g2 <- ggplot(liver_df_new, aes(weight_g, Glucose, color = Strain))+
+  geom_point(size=2)+
+  theme_cowplot()
+
+g3 <- ggplot(liver_df_new, aes(weight_g, Glucose, shape = factor(sex)))+
+  geom_point(aes(color = factor(sex)),
+             size=2)+
+  theme_cowplot()
+
+g4 <- ggplot(liver_lng, aes(variables, value, fill =Strain ))+
+  geom_col(position="dodge")
+
+g5 <- ggplot(liver_lng, aes(variables, value, fill =factor(sex) ))+
+  geom_col(position="dodge")+
+  theme_cowplot()
+
+plot_grid(g1, g2, g3, g4, g5, labels = c("A", "B", "C", "D", "E"), ncol = 1,
+          label_size = 12)
+```
+
+## 9). Data tabularization
+
+```{r}
+liver_tbl <- liver_df_new |> 
+              group_by(Strain) |> 
+              select(-4) |> 
+              summarise(across(where(is.numeric),
+                               mean))
+liver_ft <- flextable(liver_tbl)
+
+set_table_properties(liver_ft, layout = "autofit")
+
+## Save to Word file. Note you can also save to image, powerpoint, etc
+#save_as_docx(liver_ft, path = "")
+```
+
+## 10). Data visualization: Publication-ready
+
+```{r}
+#########################################
+## Data
+########################################
+
+## Load the mammalians sleep dataset
+data("msleep")
+sleep_df <- msleep |> 
+  na.omit() |> 
+  select(-2)
+
+## Remove the "sleep_" from column names
+names(sleep_df) <- str_replace_all(names(sleep_df),"sleep_", "") 
+
+#######################################
+## Plot with ggplot2 and cowplot package
+######################################
+
+## Read different data information into an object for plotting
+
+S1 <- sleep_df |> 
+  ggplot(aes(total, fill = vore))+
+    geom_density(alpha=0.5)+
+    theme_cowplot(12)
+
+S2 <- sleep_df |> 
+  mutate(sleep_nrem = (1-(rem/total))*total)|> 
+  ggplot(aes(rem, sleep_nrem, color = vore))+
+    geom_point(size=2)+
+    theme_cowplot(12)
+
+S3 <- sleep_df |> 
+  ggplot(aes(awake, total, color = vore))+
+    geom_point(size=2)+
+    theme_cowplot(12)
+
+S4 <- sleep_df |> 
+  ggplot(aes(vore,bodywt))+
+    geom_boxplot()+
+    theme_cowplot(12)
+
+plot_grid(S1, S2, S3, S4, labels = c("A", "B", "C", "D"))
+```
+
+```{r}
+
+
+```
