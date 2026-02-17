@@ -1,0 +1,282 @@
+---
+title: "Week 6: Lab"
+subtitle: "Sequence alignment and phylogenetics"
+format: pdf
+editor: visual
+date: now
+---
+
+## Load packages
+
+```{r}
+#| warning: false
+#| message: false
+#| output: false
+
+pkgs <- c("ggplot2","devtools","adegenet","phangorn", "ape", "ade4",
+          "Biostrings", "DECIPHER", "ggtree", "pwalign")
+
+for (i in seq_along(pkgs)){
+  pkg <- pkgs[[i]]
+  tryCatch(if(pkg%in%rownames(installed.packages())){
+    cat("Available:", pkg, "\n")
+    library(pkg, character.only = TRUE)
+    cat("Package loaded:", pkg,"\n")
+  }
+  else if(!(pkg%in%rownames(installed.packages()))){
+    install.packages("BiocManager")
+    BiocManager::install(pkg)
+    library(pkg, character.only = TRUE)
+    cat("Package loaded:", pkg,"\n")
+  }
+ else{
+    cat("Not available:",pkg,">> now installing...", "\n")
+    install.packages(pkg, repos =  "https://cloud.r-project.org")
+    cat("Now available:", pkg, "\n")
+    library(pkg, character.only = TRUE)
+    cat("Package loaded:", pkg,"\n")
+  }
+  )
+}
+
+```
+
+```{r}
+#| eval: false
+
+##############################################################################
+## After running the above, if you cannot find any of the above packages in R,
+## or it's giving you an erro, then, run them individual as below
+##############################################################################
+
+###############################################################################
+## For "ggplot2","devtools","adegenet","phangorn", "ape", "ade4", "BiocManager"
+###############################################################################
+install.packages("ggplot2") # do that for all
+library("ggplot2") #load it
+
+################################################################
+## For "Biostrings", "DECIPHER", "ggtree", "pwalign"
+###############################################################
+BiocManager::install("Biostrings") # do that for all
+library(Biostrings) #load it
+
+
+```
+
+## 1) Sequence Alignment
+
+### a) Pairwise alighment
+
+```{r}
+#| output: false
+#| eval: false
+
+## These are the sequences we are working with for pairwise alignment
+
+## Query sequence
+Seqq <- "ATTTGAATGGATGTCAATCCGACTCTACTGTTCCTAAAGGTTCCAGCGCAAAATGCCATAAGCACCACATT
+CCCTTATACTGGAGATCCTCCATACAGCCATGGAACAGGAACAGGGTACACCATGGACACAGTCAACAGAACACACCAAT
+ATTCAGAGAAGGGGAAGTGGACGACAAATACAGAAACTGGGGCACCCCAACTCAACCCAATTGATGGACCACTACCTGAG
+GATAATGAGCCAAGTGGATATGCACAAACAGACTGTGTCCTGGAGGCTATGGCCTTCCTTGAAGAATCCCACCCAGGTAT
+CTTTGAGAACTCATGCCTTGAAACAATGGAAGTCGTTCAACAAACAAGGGTGGACAAACTAACCCAAGGTCGCCAGACTT
+ATGATTGGACATTAAACAGAAATCAACCGGCAGCAACTGCATTAGCCAACACCATAGAAGTTTTTAGATCGAATGGACTA
+ACAGCTAATGAATCGGGAA" #GenBank: CY002062.1
+
+## Query sequence 2
+Seqq2 <- "AGCAAAAGCAGGGGATAATTCTATTAACCATGAAGACTATCATTGCTTTGAGCTACATTCTATGTCTGGT
+TTTCGCTCAAAAACTTCCCGGAAATGACAACAGCACGGCAACGCTGTGCCTTGGGCACCATGCAGTACCAAACGGAACGA
+TAGTGAAAACAATCACGAATGACCAAATTGAAGTCACTAATGCTACTGAACTGGTTCAGAGTTCCTCAACAGGTGGAATA
+TGCGACAGTCCTCATCAGATCCTTGATGGAGAAAACTGCACACTAATAGATGCTCTATTGGGAGACCCTCAGTGTGATGG
+CTTCCAAAATAAGAAATGGGACCTTTTTGTTGAACGCAGCAAAGCCTACAGCAACTGTTACCCTTATGATGTGCCGGATT
+ATGCCTCCCTTAGGTCACTAGTTGCCTCATCCGGCACACTGGAGTTTAACAATGAAAGCTTCAATTGGACTGGAGTCACT
+CAAAATGGAACAAGCTCTGC" #GenBank: CY002064.1
+
+## Reference sequence
+Reff <- "ATGAAGACTATCATTGCTTTGAGCTACATTCTATGTCTGGTTTTCGCTCAAAAACTTCCCGGAAATGACAA
+CAGCACGGCAACGCTGTGCCTTGGGCACCATGCAGTACCAAACGGAACGATAGTGAAAACAATCACGAATGACCAAATTG
+AAGTCACTAATGCTACTGAACTGGTTCAGAGTTCCTCAACAGGTGGAATATGCGACAGTCCTCATCAGATCCTTGATGGA
+GAAAACTGCACACTAATAGATGCTCTATTGGGAGACCCTCAGTGTGATGGCTTCCAAAATAAGAAATGGGACCTTTTTGT
+TGAACGCAGCAAAGCCTACAGCAACTGTTACCCTTATGATGTGCCGGATTATGCCTCCCTTAGGTCACTAGTTGCCTCAT
+CCGGCACACTGGAGTTTAACAATGAAAGCTTCAATTGGACTGGAGTCACTCAAAATGGAACAAGCTCTGCTTGCAAAAGG
+AGATCTAATAACAGTTTCT" #NCBI Reference Sequence: NC_007366.1
+
+```
+
+
+```{r}
+
+Seq1 <- DNAString("ATTTGAATGGATGTCAATCCGACTCTACTGTTCCTAAAGGTTCCAGCGCAAAATGCCATAAGCACCACATTCCCTTATACTGGAGATCCTCCATACAGCCATGGAACAGGAACAGGGTACACCATGGACACAGTCAACAGAACACACCAATATTCAGAGAAGGGGAAGTGGACGACAAATACAGAAACTGGGGCACCCCAACTCAACCCAATTGATGGACCACTACCTGAGGATAATGAGCCAAGTGGATATGCACAAACAGACTGTGTCCTGGAGGCTATGGCCTTCCTTGAAGAATCCCACCCAGGTATCTTTGAGAACTCATGCCTTGAAACAATGGAAGTCGTTCAACAAACAAGGGTGGACAAACTAACCCAAGGTCGCCAGACTTATGATTGGACATTAAACAGAAATCAACCGGCAGCAACTGCATTAGCCAACACCATAGAAGTTTTTAGATCGAATGGACTAACAGCTAATGAATCGGGAA")
+
+Seq2 <- DNAString("AGCAAAAGCAGGGGATAATTCTATTAACCATGAAGACTATCATTGCTTTGAGCTACATTCTATGTCTGGTTTTCGCTCAAAAACTTCCCGGAAATGACAACAGCACGGCAACGCTGTGCCTTGGGCACCATGCAGTACCAAACGGAACGATAGTGAAAACAATCACGAATGACCAAATTGAAGTCACTAATGCTACTGAACTGGTTCAGAGTTCCTCAACAGGTGGAATATGCGACAGTCCTCATCAGATCCTTGATGGAGAAAACTGCACACTAATAGATGCTCTATTGGGAGACCCTCAGTGTGATGGCTTCCAAAATAAGAAATGGGACCTTTTTGTTGAACGCAGCAAAGCCTACAGCAACTGTTACCCTTATGATGTGCCGGATTATGCCTCCCTTAGGTCACTAGTTGCCTCATCCGGCACACTGGAGTTTAACAATGAAAGCTTCAATTGGACTGGAGTCACTCAAAATGGAACAAGCTCTGC")
+
+Ref <- DNAString("ATGAAGACTATCATTGCTTTGAGCTACATTCTATGTCTGGTTTTCGCTCAAAAACTTCCCGGAAATGACAACAGCACGGCAACGCTGTGCCTTGGGCACCATGCAGTACCAAACGGAACGATAGTGAAAACAATCACGAATGACCAAATTGAAGTCACTAATGCTACTGAACTGGTTCAGAGTTCCTCAACAGGTGGAATATGCGACAGTCCTCATCAGATCCTTGATGGAGAAAACTGCACACTAATAGATGCTCTATTGGGAGACCCTCAGTGTGATGGCTTCCAAAATAAGAAATGGGACCTTTTTGTTGAACGCAGCAAAGCCTACAGCAACTGTTACCCTTATGATGTGCCGGATTATGCCTCCCTTAGGTCACTAGTTGCCTCATCCGGCACACTGGAGTTTAACAATGAAAGCTTCAATTGGACTGGAGTCACTCAAAATGGAACAAGCTCTGCTTGCAAAAGGAGATCTAATAACAGTTTCT")
+
+pwalign1 <- pairwiseAlignment(Seq1, Ref)
+pwalign1
+```
+
+
+### b) Multiple alignment
+
+
+```{r}
+#| warning: false
+
+Mseq <- list()
+  
+Mseq[1] <-  Seq2
+Mseq[2] <- Seq1
+Mseq[3] <- Ref
+
+dna0 <- DNAStringSet(Mseq)
+Malign <- AlignSeqs(dna0)
+Malign
+```
+
+\newpage
+
+## 2) Phylogenetic analysis
+
+```{r}
+
+dna_df <- read.dna("http://adegenet.r-forge.r-project.org/files/usflu.fasta",
+                   format = "fasta")
+###############################################################################
+## If dna_df is not loading, download GENET_fasta.RData from the Week 6 folder
+## Copy the path from your PC and paste in the load() below. It will be loaded to R
+## E.g, load("C:/Users/Kyles/Download/GENET_fasta.RData")
+###############################################################################
+
+# load("")
+
+## Perform Distance between sequence
+dna_dist <- dist.dna(dna_df, model = "TN93")
+
+dna_tree <- as.phylo(hclust(dna_dist, method = "average"))
+
+```
+
+### a) Model selection
+
+```{r}
+
+To_phyD <- phyDat(dna_df)
+
+mod.phy <- modelTest(To_phyD, model = c("JC", "F81", "K80", "HKY","K81",
+                             "SYM", "GTR"))
+```
+
+### b) Plot trees
+
+```{r}
+#| warning: false
+
+## View node numbering
+ggtree(dna_tree)+
+  geom_tiplab()+
+  geom_text2(mapping = aes(label = node))
+
+## Add tip label layer to the tree
+gtree <- ggtree(dna_tree)+
+  geom_tiplab()
+
+## View subset of the node
+viewClade(gtree, node = 83) 
+
+## Tree layouts
+
+ggtree(dna_tree, layout = "radial")+
+  geom_tiplab()
+
+ggtree(dna_tree, layout = "fan")+
+  geom_tiplab()
+```
+
+### c) Using Neighor-joining
+
+```{r}
+#| warning: false
+#| message: false
+
+## Compute tree using neighbor-joining
+nj_tree <- nj(dna_dist)
+
+## Convert to phylo object
+nj_tree2 <- as.phylo(nj_tree)
+
+## Plot tree
+nj_gtree <- ggtree(nj_tree2)+
+  geom_tiplab()
+
+## View a subset node
+viewClade(nj_gtree, node=83)
+```
+
+### d) UPGMA
+
+```{r}
+#| warning: false
+#| message: false
+
+## Compute tree using the unweighted pair group method with arithmetic mean (UPGMA)
+upgma_tree <- upgma(dna_dist)
+
+## Convert to phylo object
+upgma_tree2 <- as.phylo(upgma_tree)
+
+## Plot tree
+upgma_gtree <- ggtree(upgma_tree2)+
+  geom_tiplab()
+
+## View a subset node
+viewClade(upgma_gtree, node=83)
+```
+
+## Task
+
+-   Replace TN93 with the best model (lowest AIC or BIC) in 2a above. That is, choose any of "JC", "K80", "F81", or "K81" model that has the lowest value.
+
+-   Compare the tree with 2c and 2d
+
+```{r}
+#| warning: false
+#| message: false
+
+## Perform Distance between sequence
+dna_mat <- dist.dna(dna_df, model = "K81") #Replace TN93
+
+###############################################
+### NJ #####################################
+###############################################
+
+nj_tr <- as.phylo(nj(dna_mat))
+
+#Plot tree
+nj_gtree <- ggtree(nj_tree2)+
+  geom_tiplab()
+
+#View a subset node
+viewClade(nj_gtree, node=83)
+
+###############################################
+### UPGMA #####################################
+###############################################
+
+upgma_tr <- as.phylo(upgma(dna_mat, method = "average"))
+
+## Plot tree
+upgma_gtree <- ggtree(upgma_tree2)+
+  geom_tiplab()
+
+## View a subset node
+viewClade(upgma_gtree, node=83)
+
+```
+
+Is there any difference?
+There's no difference between the task method and 2c&d
+
+Note:
+
+Unlike the UPGMA, the neighbor-joining method does not make all taxa equidistant from the root. This is a crucial difference as UPGMA makes the molecular clock assumption (i.e, uniform evolutionary rates) which NJ doesn't make. This is evident as you'll notice equidistant tips in UPGMA compared to different tip length in NJ both in the task and 2c&d.
